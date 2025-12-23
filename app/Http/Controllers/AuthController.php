@@ -41,7 +41,7 @@ class AuthController extends Controller
         ]);
     }
 
-
+    // تسجيل الدخول
     public function login(Request $request) {
     $credentials = $request->validate([
         'email' => 'required|email',
@@ -104,9 +104,11 @@ class AuthController extends Controller
 
     }
 
+    // إرسال رابط إعادة تعيين كلمة المرور
    public function sendResetLink(Request $request) {
     $request->validate(['email' => 'required|email']);
 
+    // التحقق من وجود المستخدم أولاً
     $user = User::where('email', $request->email)->first();
     if (!$user) {
         return response()->json(['message' => 'لا يوجد مستخدم مسجل بهذا البريد الإلكتروني.'], 404);
@@ -118,15 +120,18 @@ class AuthController extends Controller
         if ($status === Password::RESET_LINK_SENT) {
             return response()->json(['message' => 'تم إرسال رابط إعادة التعيين إلى بريدك الإلكتروني.']);
         } else {
+            // تسجيل الخطأ بالتفصيل
             \Log::error('Password reset error: ' . $status);
             return response()->json(['message' => 'حدث خطأ أثناء إرسال الرابط. يرجى المحاولة مرة أخرى لاحقًا.'], 500);
         }
     } catch (\Exception $e) {
+        // تسجيل الاستثناء بالكامل
         \Log::error('Password reset exception: ' . $e->getMessage());
         return response()->json(['message' => 'حدث خطأ في النظام: ' . $e->getMessage()], 500);
     }
 }
 
+    // تحديث كلمة المرور بعد إعادة التعيين
     public function resetPassword(Request $request) {
         $request->validate([
             'token' => 'required',
@@ -157,15 +162,17 @@ class AuthController extends Controller
             'email' => 'required|email|exists:users,email'
         ]);
 
-
+        // توليد كود OTP (6 أرقام)
         $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $expiresAt = now()->addMinutes(10);
+        $expiresAt = now()->addMinutes(10); // صلاحية 10 دقائق
 
+        // تخزين OTP في الكاش مع البريد الإلكتروني
         Cache::put('otp_'.$request->email, [
             'otp' => $otp,
             'expires_at' => $expiresAt
         ], $expiresAt);
 
+        // إرسال البريد الإلكتروني
         Mail::to($request->email)->send(new OtpMail($otp));
 
         return response()->json([
@@ -174,6 +181,9 @@ class AuthController extends Controller
         ]);
     }
 
+    /**
+     * تسجيل الدخول باستخدام OTP
+     */
     public function loginWithOtp(Request $request)
     {
         $request->validate([
@@ -181,6 +191,7 @@ class AuthController extends Controller
             'otp' => 'required|string|size:6'
         ]);
 
+        // التحقق من صحة OTP
         $cachedOtp = Cache::get('otp_'.$request->email);
 
         if (!$cachedOtp || $cachedOtp['otp'] !== $request->otp) {
@@ -190,6 +201,7 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // جلب المستخدم
         $user = User::where('email', $request->email)->first();
 
         if (!$user) {
@@ -199,12 +211,16 @@ class AuthController extends Controller
             ], 404);
         }
 
+        // تسجيل دخول المستخدم
         Auth::login($user);
 
+        // إنشاء التوكن
         $token = $user->createToken('auth_token')->plainTextToken;
 
+        // دمج بيانات الضيف مع حساب المستخدم
         $this->mergeGuestData($request);
 
+        // حذف OTP من الكاش بعد استخدامه
         Cache::forget('otp_'.$request->email);
 
         return response()->json([
@@ -214,7 +230,9 @@ class AuthController extends Controller
         ])->withoutCookie('guest_uuid');
     }
 
-
+    /**
+     * تغيير كلمة المرور (للمستخدم المسجل)
+     */
     public function changePassword(Request $request)
     {
         $request->validate([
@@ -224,6 +242,7 @@ class AuthController extends Controller
 
         $user = $request->user();
 
+        // التحقق من كلمة المرور الحالية
         if (!Hash::check($request->current_password, $user->password)) {
             return response()->json([
                 'success' => false,
@@ -231,9 +250,11 @@ class AuthController extends Controller
             ], 401);
         }
 
+        // تحديث كلمة المرور
         $user->password = Hash::make($request->new_password);
         $user->save();
 
+        // إرسال إشعار بتغيير كلمة المرور
         event(new PasswordReset($user));
 
         return response()->json([
@@ -242,18 +263,21 @@ class AuthController extends Controller
         ]);
     }
 
-
+    /**
+     * دمج بيانات الضيف مع حساب المستخدم (دالة مساعدة)
+     */
     private function mergeGuestData(Request $request)
     {
         $user = Auth::user();
 
+        // دمج المفضلة من الجلسة
         $sessionFavorites = $request->session()->get('favorites', []);
         if (!empty($sessionFavorites)) {
             $user->favorites()->syncWithoutDetaching($sessionFavorites);
             session()->forget('favorites');
         }
 
-
+        // دمج المفضلة من guest_uuid
         $guestUuid = $request->cookie('guest_uuid');
         if ($guestUuid) {
             Favorite::where('guest_uuid', $guestUuid)
@@ -270,11 +294,11 @@ class AuthController extends Controller
         }
     }
 
-
+    // إرسال OTP لإعادة تعيين كلمة المرور
 public function sendResetOtp(Request $request) {
     $request->validate(['email' => 'required|email']);
 
-
+    // التحقق من وجود المستخدم
     $user = User::where('email', $request->email)->first();
     if (!$user) {
         return response()->json([
@@ -284,17 +308,17 @@ public function sendResetOtp(Request $request) {
     }
 
     try {
-
+        // توليد كود OTP (6 أرقام)
         $otp = str_pad(random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-        $expiresAt = now()->addMinutes(10);
+        $expiresAt = now()->addMinutes(10); // صلاحية 10 دقائق
 
-
+        // تخزين OTP في الكاش مع البريد الإلكتروني
         Cache::put('reset_otp_'.$request->email, [
             'otp' => $otp,
             'expires_at' => $expiresAt
         ], $expiresAt);
 
-
+        // إرسال البريد الإلكتروني
         Mail::to($request->email)->send(new OtpMail($otp, 'reset'));
 
         return response()->json([
@@ -310,7 +334,9 @@ public function sendResetOtp(Request $request) {
     }
 }
 
-
+/**
+ * التحقق من صحة OTP لإعادة تعيين كلمة المرور
+ */
 public function verifyResetOtp(Request $request)
 {
     $request->validate([
@@ -318,6 +344,7 @@ public function verifyResetOtp(Request $request)
         'otp' => 'required|string|size:6',
     ]);
 
+    // التحقق من صحة OTP
     $cachedOtp = Cache::get('reset_otp_'.$request->email);
 
     if (!$cachedOtp || $cachedOtp['otp'] !== $request->otp) {
@@ -327,6 +354,7 @@ public function verifyResetOtp(Request $request)
         ], 401);
     }
 
+    // إنشاء token مؤقت للتحقق (صالح لمرة واحدة ولمدة قصيرة)
     $verificationToken = Str::random(60);
     Cache::put('reset_verification_'.$request->email, $verificationToken, now()->addMinutes(10));
 
@@ -337,7 +365,9 @@ public function verifyResetOtp(Request $request)
     ]);
 }
 
-
+/**
+ * تحديث كلمة المرور بعد التحقق من OTP
+ */
 public function updatePasswordAfterVerification(Request $request)
 {
     $request->validate([
@@ -346,6 +376,7 @@ public function updatePasswordAfterVerification(Request $request)
         'password' => ['required', 'confirmed', PasswordRule::defaults()],
     ]);
 
+    // التحقق من صحة token التحقق
     $storedToken = Cache::get('reset_verification_'.$request->email);
 
     if (!$storedToken || $storedToken !== $request->verification_token) {
@@ -355,6 +386,7 @@ public function updatePasswordAfterVerification(Request $request)
         ], 401);
     }
 
+    // العثور على المستخدم وتحديث كلمة المرور
     $user = User::where('email', $request->email)->first();
 
     if (!$user) {
@@ -367,9 +399,11 @@ public function updatePasswordAfterVerification(Request $request)
     $user->password = Hash::make($request->password);
     $user->save();
 
+    // حذف tokens من الكاش بعد الاستخدام
     Cache::forget('reset_verification_'.$request->email);
     Cache::forget('reset_otp_'.$request->email);
 
+    // إرسال إشعار بتغيير كلمة المرور
     event(new PasswordReset($user));
 
     return response()->json([

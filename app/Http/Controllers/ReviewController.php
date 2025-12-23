@@ -11,7 +11,9 @@ use App\Http\Resources\ReviewResource;
 
 class ReviewController extends Controller
 {
-
+    /**
+     * عرض جميع تقييمات منتج معين (مع pagination)
+     */
     public function index(Request $request, Product $product)
     {
         $perPage = $request->get('per_page', 10);
@@ -19,7 +21,7 @@ class ReviewController extends Controller
 
         $query = $product->reviews()->with('user');
 
-
+        // التصفية والترتيب حسب النوع
         switch ($sort) {
             case 'verified':
                 $query->where('is_verified', true);
@@ -59,9 +61,12 @@ class ReviewController extends Controller
         ]);
     }
 
-
+    /**
+     * إنشاء تقييم جديد
+     */
     public function store(Request $request, Product $product)
     {
+        // التحقق من المصادقة
         if (!Auth::check()) {
             return response()->json([
                 'success' => false,
@@ -69,6 +74,7 @@ class ReviewController extends Controller
             ], 401);
         }
 
+        // التحقق إذا كان المستخدم يمكنه التقييم (فقط إذا لم يقم بالتقييم مسبقاً)
         if (!Review::canUserReview(Auth::id(), $product->id)) {
             return response()->json([
                 'success' => false,
@@ -76,11 +82,13 @@ class ReviewController extends Controller
             ], 403);
         }
 
+        // التحقق من البيانات
         $request->validate([
             'rating' => 'required|integer|between:1,5',
             'comment' => 'nullable|string|max:1000'
         ]);
 
+        // إنشاء التقييم
         $review = Review::create([
             'user_id' => Auth::id(),
             'product_id' => $product->id,
@@ -96,6 +104,9 @@ class ReviewController extends Controller
         ], 201);
     }
 
+    /**
+     * عرض تقييم محدد
+     */
     public function show(Review $review)
     {
         return response()->json([
@@ -104,9 +115,12 @@ class ReviewController extends Controller
         ]);
     }
 
-
+    /**
+     * تحديث التقييم
+     */
     public function update(Request $request, Review $review)
     {
+        // التحقق من الملكية
         if ($review->user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,
@@ -128,8 +142,12 @@ class ReviewController extends Controller
         ]);
     }
 
+    /**
+     * حذف التقييم
+     */
     public function destroy(Review $review)
     {
+        // التحقق من الملكية أو إذا كان المشرف
         if ($review->user_id !== Auth::id() && !Auth::user()->is_admin) {
             return response()->json([
                 'success' => false,
@@ -145,7 +163,9 @@ class ReviewController extends Controller
         ]);
     }
 
-
+    /**
+     * تقييمات المستخدم الحالي
+     */
     public function userReviews(Request $request)
     {
         $perPage = $request->get('per_page', 10);
@@ -167,9 +187,12 @@ class ReviewController extends Controller
         ]);
     }
 
-
+    /**
+     * الإحصائيات العامة للتقييمات
+     */
     public function stats(Product $product)
     {
+        // حساب توزيع التقييمات
         $ratingDistribution = [
             '1' => $product->reviews()->where('rating', 1)->count(),
             '2' => $product->reviews()->where('rating', 2)->count(),
@@ -178,6 +201,7 @@ class ReviewController extends Controller
             '5' => $product->reviews()->where('rating', 5)->count(),
         ];
 
+        // حساب النسب المئوية
         $totalReviews = $product->reviews()->count();
         $ratingPercentages = [];
 
@@ -199,11 +223,15 @@ class ReviewController extends Controller
         ]);
     }
 
+    /**
+     * دالة جديدة: جلب جميع تقييمات منتج معين (بدون pagination)
+     */
     public function getAllReviews(Request $request, $productId)
     {
         try {
             $product = Product::findOrFail($productId);
 
+            // جلب جميع التقييمات مع معلومات المستخدم
             $reviews = Review::with('user')
                             ->where('product_id', $productId)
                             ->orderBy('created_at', 'desc')
@@ -232,7 +260,9 @@ class ReviewController extends Controller
             ], 500);
         }
     }
-
+   /**
+ * الحصول على أكثر المنتجات تقييماً (بدون نجوم)
+ */
 public function getTopRatedProducts(Request $request)
 {
     $limit = $request->get('limit', 10);
@@ -256,6 +286,7 @@ public function getTopRatedProducts(Request $request)
                 'category' => $product->category,
                 'average_rating' => round($product->reviews_avg_rating, 1),
                 'reviews_count' => $product->reviews_count,
+                // إزالة rating_stars أو استبدالها بقيمة رقمية
                 'rating' => round($product->reviews_avg_rating, 1),
                 'full_stars' => floor($product->reviews_avg_rating),
                 'has_half_star' => ($product->reviews_avg_rating - floor($product->reviews_avg_rating)) >= 0.3

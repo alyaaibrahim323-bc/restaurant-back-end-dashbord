@@ -10,7 +10,9 @@ use App\Models\Branch;
 
 class AddressController extends Controller
 {
-
+    /**
+     * الحصول على جميع عناوين المستخدم
+     */
     public function index()
     {
         $addresses = Address::forUser(Auth::id())
@@ -23,7 +25,9 @@ class AddressController extends Controller
         ]);
     }
 
-
+    /**
+     * إنشاء عنوان جديد
+     */
     public function store(Request $request)
 {
     $validator = Validator::make($request->all(), [
@@ -39,7 +43,7 @@ class AddressController extends Controller
         'is_default' => 'sometimes|boolean',
         'latitude' => 'nullable|numeric',
         'longitude' => 'nullable|numeric',
-        'branch_id' => 'required|exists:branches,id'
+        'branch_id' => 'required|exists:branches,id' // ✅ بس بنستخدمه للحساب
     ]);
 
     if ($validator->fails()) {
@@ -49,6 +53,7 @@ class AddressController extends Controller
         ], 422);
     }
 
+    // ✅ جلب بيانات الفرع اللي تم اختياره
     $branch = Branch::active()->find($request->branch_id);
 
     if (!$branch) {
@@ -58,6 +63,7 @@ class AddressController extends Controller
         ], 400);
     }
 
+    // بيانات العنوان
     $addressData = $request->only([
         'street', 'city', 'state', 'country', 'postal_code',
         'building_number', 'apartment_number', 'floor_number',
@@ -65,8 +71,10 @@ class AddressController extends Controller
     ]);
     $addressData['user_id'] = Auth::id();
 
+    // حفظ العنوان
     $address = Address::create($addressData);
 
+    // لو العنوان ده افتراضي
     if ($request->is_default) {
         $this->setDefaultAddress($address);
     }
@@ -76,15 +84,18 @@ class AddressController extends Controller
         'message' => 'تم إنشاء العنوان بنجاح',
         'data' => [
             'address' => $address,
-            'delivery_fee' => $branch->delivery_fee_base
+            'delivery_fee' => $branch->delivery_fee_base // ✅ القيمة فقط بدون تخزين
         ]
     ], 201);
 }
 
 
-
+    /**
+     * تحديث عنوان موجود
+     */
     public function update(Request $request, Address $address)
     {
+        // التحقق من ملكية العنوان
         if ($address->user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,
@@ -116,6 +127,7 @@ class AddressController extends Controller
 
         $address->update($request->all());
 
+        // إذا تم تعيينه كافتراضي، تحديث العناوين الأخرى
         if ($request->is_default) {
             $this->setDefaultAddress($address);
         }
@@ -127,9 +139,12 @@ class AddressController extends Controller
         ]);
     }
 
-
+    /**
+     * حذف عنوان
+     */
     public function destroy(Address $address)
     {
+        // التحقق من ملكية العنوان
         if ($address->user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,
@@ -137,6 +152,7 @@ class AddressController extends Controller
             ], 403);
         }
 
+        // منع حذف العنوان الافتراضي
         if ($address->is_default) {
             return response()->json([
                 'success' => false,
@@ -152,10 +168,12 @@ class AddressController extends Controller
         ]);
     }
 
-
+    /**
+     * تعيين عنوان كافتراضي
+     */
     public function setDefault(Address $address)
     {
-
+        // التحقق من ملكية العنوان
         if ($address->user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,
@@ -171,13 +189,17 @@ class AddressController extends Controller
         ]);
     }
 
-
+    /**
+     * دالة مساعدة لتعيين العنوان الافتراضي
+     */
     private function setDefaultAddress(Address $address)
     {
+        // إلغاء التعيين الافتراضي من جميع العناوين
         Address::where('user_id', Auth::id())
             ->where('id', '!=', $address->id)
             ->update(['is_default' => false]);
 
+        // تعيين العنوان الحالي كافتراضي
         $address->update(['is_default' => true]);
     }
     public function show($id)

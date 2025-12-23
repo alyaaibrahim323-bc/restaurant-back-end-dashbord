@@ -139,6 +139,7 @@ class PaymentController extends Controller
             'order_total' => $order->total
         ]);
 
+        // إنشاء سجل الدفع
         $payment = Payment::create([
             'order_id' => $order->id,
             'payment_method' => $request->payment_method,
@@ -149,6 +150,7 @@ class PaymentController extends Controller
         $order->payment_id = $payment->id;
         $order->save();
 
+        // الدفع عند الاستلام
         if ($request->payment_method === 'cash_on_delivery') {
             $payment->update([
                 'transaction_id' => 'COD-' . Str::uuid(),
@@ -170,7 +172,9 @@ class PaymentController extends Controller
             ]);
         }
 
+        // الدفع الإلكتروني
         try {
+            // التحقق من الـ Config
             if (!config('services.paymob.api_key')) {
                 throw new \Exception('PAYMOB_API_KEY مفقود في ملف .env');
             }
@@ -212,6 +216,7 @@ class PaymentController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
+            // Update payment status to failed
             $payment->update(['status' => self::PAYMENT_STATUS_FAILED]);
 
             return response()->json([
@@ -226,6 +231,7 @@ class PaymentController extends Controller
         $data = $request->all();
         Log::info('Paymob Webhook Received', $data);
 
+        // التحقق من HMAC
         $hmac = $request->header('x-hmac');
         $calculatedHmac = hash_hmac('sha512', json_encode($data), config('services.paymob.hmac_secret'));
 
@@ -237,6 +243,7 @@ class PaymentController extends Controller
             return response()->json(['error' => 'Invalid HMAC'], 403);
         }
 
+        // معالجة الدفع الناجح
         if (isset($data['obj']) && $data['obj']['success'] === true) {
             $merchantOrderId = $data['obj']['order']['merchant_order_id'] ?? null;
 
@@ -279,6 +286,7 @@ class PaymentController extends Controller
             return response()->json(['success' => true]);
         }
 
+        // معالجة الدفع الفاشل
         if (isset($data['obj'])) {
             $merchantOrderId = $data['obj']['order']['merchant_order_id'] ?? null;
 

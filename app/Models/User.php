@@ -29,7 +29,7 @@ class User extends Authenticatable
         'email',
         'password',
         'phone',
-        'is_admin',
+        'is_admin', // إضافة هذا الحقل
 
     ];
 
@@ -66,6 +66,7 @@ class User extends Authenticatable
         return $this->hasMany(Cart::class);
     }
 
+    // تحقق إذا كان المستخدم مسؤولاً
     public function isAdmin()
     {
         return $this->is_admin;
@@ -94,7 +95,9 @@ public function offers()
                     ->withTimestamps();
     }
 
-
+    /**
+     * التحقق مما إذا كان المستخدم استخدم برومو كود معين
+     */
     public function hasUsedPromoCode($promoCode)
     {
         return $this->offers()
@@ -102,12 +105,14 @@ public function offers()
                     ->exists();
     }
 
-
+    /**
+     * الحصول على إجمالي التوفير من العروض
+     */
     public function getTotalSavingsAttribute()
     {
         return $this->offers()->sum('user_offers.discount_amount');
     }
-
+    
 // ????????????????????????????
  public static function validateLogin($email, $password)
     {

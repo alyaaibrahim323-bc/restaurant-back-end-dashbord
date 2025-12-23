@@ -14,7 +14,7 @@ class Order extends Model
         'user_id',
         'guest_uuid',
         'total',
-        'delivery_fee',
+        'delivery_fee', // ⭐⭐ استخدام delivery_fee بدلاً من shipping_cost
         'status',
         'address_id',
         'payment_id',
@@ -70,7 +70,9 @@ class Order extends Model
         return $this->hasMany(Review::class);
     }
 
-
+    /**
+     * التحقق إذا كان الطلب يحتوي على منتج معين
+     */
     public function hasProduct($productId)
     {
         return $this->orderItems()->where('product_id', $productId)->exists();
@@ -81,23 +83,33 @@ class Order extends Model
         return $this->belongsTo(Branch::class);
     }
 
-
+    /**
+     * العلاقة مع منطقة التوصيل
+     */
     public function deliveryArea()
     {
         return $this->belongsTo(DeliveryArea::class);
     }
 
+    /**
+     * العلاقة مع العرض المطبق
+     */
     public function appliedOffer()
     {
         return $this->belongsTo(Offer::class, 'applied_offer_id');
     }
 
-
+    /**
+     * حساب الإجمالي النهائي (Accessor)
+     */
     public function getFinalTotalAttribute()
     {
         return ($this->subtotal + $this->shipping_cost) - $this->discount_amount;
     }
 
+    /**
+     * تحديث التكلفة بناءً على منطقة التوصيل
+     */
     public function updateDeliveryInfo(DeliveryArea $deliveryArea)
     {
         $this->update([
@@ -108,7 +120,9 @@ class Order extends Model
         ]);
     }
 
-
+    /**
+     * الحصول على معلومات التوصيل الكاملة
+     */
     public function getDeliveryInfoAttribute()
     {
         if ($this->deliveryArea) {

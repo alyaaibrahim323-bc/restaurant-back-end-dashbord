@@ -18,13 +18,16 @@ class Payment extends Model
         'status'
     ];
 
+    // تعريف الحالات
     const STATUS_PENDING = 'pending';
     const STATUS_COMPLETED = 'completed';
     const STATUS_FAILED = 'failed';
 
+    // تعريف وسائل الدفع
     const METHOD_CARD = 'card';
     const METHOD_CASH = 'cash_on_delivery';
 
+    // علاقة الطلب
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);

@@ -9,7 +9,9 @@ use Illuminate\Support\Str;
 
 class ConversationController extends Controller
 {
-
+    /**
+     * حفظ رسالة جديدة مرتبطة بمستخدم
+     */
     public function storeMessageByUserId(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -26,10 +28,10 @@ class ConversationController extends Controller
             ], 422);
         }
 
-
+        // البحث عن سجل المستخدم (حسب user_id فقط)
         $conversation = Conversation::where('user_id', $request->user_id)->first();
 
-
+        // لو مفيش سجل، نعمل واحد جديد
         if (!$conversation) {
             $conversation = Conversation::create([
                 'user_id' => $request->user_id,
@@ -38,10 +40,10 @@ class ConversationController extends Controller
             ]);
         }
 
-
+        // تحويل الرسائل القديمة إلى array
         $messages = json_decode($conversation->message, true) ?? [];
 
-
+        // التأكد إن message_id مش مكرر
         foreach ($messages as $msg) {
             if (isset($msg['message_id']) && $msg['message_id'] === $request->message_id) {
                 return response()->json([
@@ -51,7 +53,7 @@ class ConversationController extends Controller
             }
         }
 
-
+        // إضافة الرسالة الجديدة
         $messages[] = [
             'message_id' => $request->message_id,
             'role' => $request->role,
@@ -59,7 +61,7 @@ class ConversationController extends Controller
             'timestamp' => now()->toDateTimeString(),
         ];
 
-
+        // تحديث بيانات المستخدم
         $conversation->update([
             'message' => json_encode($messages)
         ]);
@@ -71,7 +73,9 @@ class ConversationController extends Controller
         ]);
     }
 
-
+    /**
+     * استرجاع سجل الرسائل لمستخدم معين
+     */
     public function getUserMessages($userId)
     {
         $conversation = Conversation::where('user_id', $userId)->first();
@@ -90,7 +94,9 @@ class ConversationController extends Controller
         ]);
     }
 
-
+    /**
+     * استرجاع جميع المستخدمين الذين لديهم محادثات
+     */
     public function getAllUserConversations()
     {
         $users = Conversation::select('user_id')

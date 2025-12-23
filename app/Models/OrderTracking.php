@@ -15,6 +15,7 @@ class OrderTracking extends Model
         'notes'
     ];
 
+    // علاقة الطلب
     public function order()
     {
         return $this->belongsTo(Order::class);

@@ -16,7 +16,9 @@ use Illuminate\Support\Facades\Cache;
 
 class OfferController extends Controller
 {
-
+    /**
+     * عرض جميع العروض المتاحة
+     */
     public function index(Request $request)
     {
         try {
@@ -56,9 +58,13 @@ class OfferController extends Controller
         }
     }
 
+    /**
+     * عرض العروض التي استخدمها المستخدم
+     */
     public function myOffers()
     {
         try {
+            // 🔐 التحقق من تسجيل الدخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized access to myOffers');
@@ -103,7 +109,9 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * عرض تفاصيل عرض محدد
+     */
     public function show(Offer $offer)
     {
         try {
@@ -127,7 +135,9 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * البحث عن عرض بالبرومو كود
+     */
     public function findByPromoCode($promoCode)
     {
         try {
@@ -166,10 +176,13 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * إنشاء عرض جديد (للمشرفين)
+     */
     public function store(Request $request)
     {
         try {
+            // 🔐 التحقق من صلاحية المشرف
             $user = Auth::user();
             if (!$user || !$user->is_admin) {
                 Log::warning('Unauthorized admin access attempt', ['user_id' => $user?->id]);
@@ -194,7 +207,7 @@ class OfferController extends Controller
             ]);
 
             $data = $request->only([
-                'title', 'description', 'promo_code', 'discount_type',
+                'title', 'description', 'promo_code', 'discount_type', 
                 'discount_value', 'color', 'valid_until', 'usage_limit'
             ]);
 
@@ -252,10 +265,13 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * تحديث عرض (للمشرفين)
+     */
     public function update(Request $request, Offer $offer)
     {
         try {
+            // 🔐 التحقق من صلاحية المشرف
             $user = Auth::user();
             if (!$user || !$user->is_admin) {
                 Log::warning('Unauthorized admin access attempt', ['user_id' => $user?->id]);
@@ -297,7 +313,7 @@ class OfferController extends Controller
                 if ($offer->image) {
                     Storage::disk('public')->delete($offer->image);
                 }
-
+                
                 $imagePath = $request->file('image')->store('offers', 'public');
                 $data['image'] = $imagePath;
             }
@@ -342,9 +358,13 @@ class OfferController extends Controller
         }
     }
 
+    /**
+     * حذف عرض (للمشرفين)
+     */
     public function destroy(Offer $offer)
     {
         try {
+            // 🔐 التحقق من صلاحية المشرف
             $user = Auth::user();
             if (!$user || !$user->is_admin) {
                 Log::warning('Unauthorized admin access attempt', ['user_id' => $user?->id]);
@@ -388,7 +408,10 @@ class OfferController extends Controller
             ], 500);
         }
     }
-/
+
+    /**
+     * تطبيق العرض على السلة - للمستخدمين المسجلين فقط
+     */
     public function applyPromoCodeInstant(Request $request)
     {
         try {
@@ -399,6 +422,7 @@ class OfferController extends Controller
                 'address_id' => 'nullable|exists:addresses,id'
             ]);
 
+            // 🔐 التحقق من أن المستخدم مسجل دخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized promo code application attempt');
@@ -408,6 +432,7 @@ class OfferController extends Controller
                 ], 401);
             }
 
+            // 🛒 جلب عناصر السلة للمستخدم المسجل فقط
             $cartItems = $user->cartItems()
                 ->with(['product' => function($query) {
                     $query->where('is_active', true);
@@ -425,8 +450,10 @@ class OfferController extends Controller
                 ], 400);
             }
 
+            // 💰 حساب المجموع
             $subtotal = $this->calculateSubtotal($cartItems);
 
+            // 🚚 حساب رسوم الشحن
             $deliveryFee = 30;
             if ($request->filled('address_id')) {
                 $address = Address::find($request->address_id);
@@ -435,6 +462,7 @@ class OfferController extends Controller
                 }
             }
 
+            // 🎟️ جلب العرض بالبرومو كود
             $offer = Offer::byPromoCode($request->promo_code)->first();
 
             if (!$offer) {
@@ -460,6 +488,7 @@ class OfferController extends Controller
                 ], 400);
             }
 
+            // 🧩 التحقق إذا استخدم الكود قبل كده
             if ($user->hasUsedPromoCode($offer->promo_code)) {
                 Log::warning('User already used promo code', [
                     'user_id' => $user->id,
@@ -471,10 +500,12 @@ class OfferController extends Controller
                 ], 400);
             }
 
+            // 🧮 حساب الخصم والإجمالي
             $discountAmount = $offer->applyDiscount($subtotal, $deliveryFee);
             $discountAmount = is_numeric($discountAmount) ? $discountAmount : 0;
             $total = $subtotal + $deliveryFee - $discountAmount;
 
+            // 💾 حفظ الكود في Cache للمستخدم المسجل فقط
             $this->storeAppliedPromoCode($user, $request->promo_code, $discountAmount);
 
             Log::info('Promo code applied successfully', [
@@ -532,10 +563,13 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * ❌ إلغاء البرومو كود - للمستخدمين المسجلين فقط
+     */
     public function removePromoCode(Request $request)
     {
         try {
+            // 🔐 التحقق من أن المستخدم مسجل دخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized promo code removal attempt');
@@ -547,8 +581,10 @@ class OfferController extends Controller
 
             Log::info('Removing promo code', ['user_id' => $user->id]);
 
+            // 🗑️ حذف الكود المخزن من Cache
             $this->forgetAppliedPromoCode($user);
 
+            // إعادة حساب المجموع بدون خصم
             $cartItems = $user->cartItems()
                 ->with(['product' => function($query) {
                     $query->where('is_active', true);
@@ -559,7 +595,7 @@ class OfferController extends Controller
                 ->get();
 
             $subtotal = $this->calculateSubtotal($cartItems);
-
+            
             $deliveryFee = 30;
             if ($request->has('address_id') && $request->address_id) {
                 $address = Address::find($request->address_id);
@@ -601,9 +637,13 @@ class OfferController extends Controller
         }
     }
 
+    /**
+     * تطبيق العرض على طلب موجود
+     */
     public function applyToOrder(Request $request)
     {
         try {
+            // 🔐 التحقق من تسجيل الدخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized order promo application attempt');
@@ -625,7 +665,7 @@ class OfferController extends Controller
             ]);
 
             $order = Order::where('user_id', $user->id)->findOrFail($request->order_id);
-
+            
             if ($order->status !== 'pending') {
                 Log::warning('Cannot apply promo to non-pending order', [
                     'user_id' => $user->id,
@@ -717,10 +757,13 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * التحقق من صحة البرومو كود
+     */
     public function validatePromoCode(Request $request)
     {
         try {
+            // 🔐 التحقق من تسجيل الدخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized promo validation attempt');
@@ -814,10 +857,13 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * ✅ التحقق من وجود كود مخزن في Cache - للمستخدمين المسجلين فقط
+     */
     public function checkStoredPromoCode(Request $request)
     {
         try {
+            // 🔐 التحقق من أن المستخدم مسجل دخول
             $user = Auth::user();
             if (!$user) {
                 Log::warning('Unauthorized stored promo check attempt');
@@ -830,7 +876,7 @@ class OfferController extends Controller
             Log::info('Checking stored promo code', ['user_id' => $user->id]);
 
             $storedPromo = $this->getAppliedPromoCode($user);
-
+            
             if (!$storedPromo) {
                 Log::info('No stored promo code found', ['user_id' => $user->id]);
                 return response()->json([
@@ -840,14 +886,14 @@ class OfferController extends Controller
             }
 
             $offer = Offer::byPromoCode($storedPromo['promo_code'])->first();
-
+            
             if (!$offer || !$offer->is_available) {
                 Log::warning('Stored promo code no longer valid', [
                     'user_id' => $user->id,
                     'stored_promo' => $storedPromo
                 ]);
                 $this->forgetAppliedPromoCode($user);
-
+                
                 return response()->json([
                     'success' => false,
                     'message' => 'كود الخصم المُطبق لم يعد صالحاً'
@@ -882,13 +928,14 @@ class OfferController extends Controller
         }
     }
 
+    // ===== الدوال المساعدة =====
 
     private function applyOfferToOrder(Offer $offer, Order $order)
     {
         try {
             $subtotal = $order->subtotal ?? 0;
             $deliveryFee = $order->delivery_fee ?? 0;
-
+            
             $discountAmount = $offer->applyDiscount($subtotal, $deliveryFee);
             $discountAmount = is_numeric($discountAmount) ? $discountAmount : 0;
 
@@ -924,7 +971,7 @@ class OfferController extends Controller
         try {
             if (class_exists('App\Http\Controllers\DeliveryController')) {
                 $deliveryController = new \App\Http\Controllers\DeliveryController();
-
+                
                 $areaRequest = new Request([
                     'area_name' => $address->city,
                     'latitude' => $address->latitude,
@@ -938,7 +985,7 @@ class OfferController extends Controller
 
                 if ($areaData->success && !empty($areaData->data)) {
                     $deliveryArea = $areaData->data[0];
-
+                    
                     $feeRequest = new Request([
                         'area_name' => $deliveryArea->area_name,
                         'order_amount' => $subtotal
@@ -954,9 +1001,9 @@ class OfferController extends Controller
                     return $deliveryArea->delivery_fee ?? 30;
                 }
             }
-
+            
             return 30;
-
+            
         } catch (\Exception $e) {
             Log::error('Error in calculateShipping: ' . $e->getMessage(), [
                 'address_id' => $address->id,
@@ -1038,7 +1085,11 @@ class OfferController extends Controller
         }
     }
 
+    // ===== دوال Cache للمستخدمين المسجلين فقط =====
 
+    /**
+     * 💾 تخزين الكود للمستخدمين المسجلين فقط
+     */
     private function storeAppliedPromoCode($user, $promoCode, $discountAmount)
     {
         try {
@@ -1065,7 +1116,9 @@ class OfferController extends Controller
         }
     }
 
-
+    /**
+     * 🔍 استرجاع الكود المخزن
+     */
     private function getAppliedPromoCode($user)
     {
         try {
@@ -1088,6 +1141,9 @@ class OfferController extends Controller
         }
     }
 
+    /**
+     * 🗑️ حذف الكود المخزن
+     */
     private function forgetAppliedPromoCode($user)
     {
         try {

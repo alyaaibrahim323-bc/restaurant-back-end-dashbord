@@ -19,8 +19,10 @@ class NotificationController extends Controller
         $user = Auth::user();
         $deviceType = $request->input('device_type', 'android');
 
+        // حذف التوكن القديم إذا كان موجوداً
         DeviceToken::where('token', $request->token)->delete();
 
+        // إنشاء التوكن الجديد
         $user->deviceTokens()->create([
             'token' => $request->token,
             'device_type' => $deviceType
@@ -52,6 +54,7 @@ class NotificationController extends Controller
     {
         $user = Auth::user();
 
+        // إرسال إشعار تجريبي
         $result = $fcmService->sendToUser(
             $user,
             'إختبار الإشعارات',

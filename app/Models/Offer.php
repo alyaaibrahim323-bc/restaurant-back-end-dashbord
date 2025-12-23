@@ -24,9 +24,9 @@ class Offer extends Model
         'usage_limit',
         'used_count'
     ];
-
+    
     protected $attributes = [
-        'discount_value' => 0,
+        'discount_value' => 0, // ⭐ قيمة افتراضية
         'is_active' => true,
         'used_count' => 0
     ];
@@ -39,7 +39,9 @@ class Offer extends Model
         'used_count' => 'integer'
     ];
 
-
+    /**
+     * العلاقة مع المستخدمين الذين استخدموا العرض
+     */
     public function users()
     {
         return $this->belongsToMany(User::class, 'user_offers')
@@ -47,7 +49,9 @@ class Offer extends Model
                     ->withTimestamps();
     }
 
-
+    /**
+     * التحقق من أن العرض متاح للاستخدام
+     */
     public function getIsAvailableAttribute()
     {
         if (!$this->is_active) {
@@ -65,13 +69,17 @@ class Offer extends Model
         return true;
     }
 
-
+    /**
+     * زيادة عداد الاستخدام
+     */
     public function incrementUsage()
     {
         $this->increment('used_count');
     }
 
-
+    /**
+     * الحصول على العروض النشطة فقط
+     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true)
@@ -85,27 +93,33 @@ class Offer extends Model
                     });
     }
 
-
+    /**
+     * البحث بالبرومو كود
+     */
     public function scopeByPromoCode($query, $promoCode)
     {
         return $query->where('promo_code', $promoCode);
     }
 
-
+    /**
+     * الحصول على URL الصورة
+     */
     public function getImageUrlAttribute()
     {
         if ($this->image) {
             return asset('storage/' . $this->image);
         }
-
+        
         return asset('images/default-offer.png');
     }
 
-
+    /**
+     * الحصول على وصف الخصم
+     */
    public function getDiscountDescriptionAttribute()
     {
         $discountValue = $this->discount_value ?? 0;
-
+        
         switch ($this->discount_type) {
             case 'percentage':
                 return "خصم {$discountValue}%";
@@ -118,19 +132,21 @@ class Offer extends Model
         }
     }
 
-
+    /**
+     * تطبيق الخصم على المبلغ - مع معالجة القيم null
+     */
   public function applyDiscount($subtotal, $deliveryFee = 0)
 {
     switch ($this->discount_type) {
         case 'percentage':
             return ($this->discount_value / 100) * $subtotal;
-
+            
         case 'fixed':
             return min($this->discount_value, $subtotal);
-
+            
         case 'free_delivery':
             return $deliveryFee;
-
+            
         default:
             return 0;
     }

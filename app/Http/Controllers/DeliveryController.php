@@ -10,7 +10,9 @@ use Illuminate\Support\Facades\Auth;
 
 class DeliveryController extends Controller
 {
-
+    /**
+     * البحث عن منطقة توصيل بناءً على العنوان
+     */
     public function findDeliveryArea(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -32,6 +34,7 @@ class DeliveryController extends Controller
 
         $query = DeliveryArea::with('branch')->active();
 
+        // البحث بالاسم أولاً
         if ($request->has('area_name') && !empty($request->area_name)) {
             $nameAreas = $query->clone()
                 ->where('area_name', 'like', "%{$request->area_name}%")
@@ -50,6 +53,7 @@ class DeliveryController extends Controller
             }
         }
 
+        // البحث بالإحداثيات
         if ($request->latitude && $request->longitude) {
             $coordinateAreas = $this->findAreasByCoordinates(
                 $request->latitude,
@@ -75,7 +79,9 @@ class DeliveryController extends Controller
         ], 404);
     }
 
-
+    /**
+     * الحصول على جميع المناطق لفرع معين
+     */
     public function getBranchAreas($branchId)
     {
         $branch = Branch::with(['deliveryAreas' => function($query) {
@@ -100,7 +106,9 @@ class DeliveryController extends Controller
         ]);
     }
 
-
+    /**
+     * البحث عن المناطق بسعر توصيل معين
+     */
     public function getAreasByFee(Request $request, $branchId)
     {
         $validator = Validator::make($request->all(), [
@@ -126,6 +134,9 @@ class DeliveryController extends Controller
         ]);
     }
 
+    /**
+     * حساب رسوم التوصيل لمنطقة معينة
+     */
     public function calculateDeliveryFee(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -158,6 +169,7 @@ class DeliveryController extends Controller
             ], 404);
         }
 
+        // التحقق من الحد الأدنى للطلب
         if (!$area->meetsMinimumOrder($request->order_amount)) {
             return response()->json([
                 'success' => false,
@@ -179,6 +191,9 @@ class DeliveryController extends Controller
         ]);
     }
 
+    /**
+     * الحصول على جميع الفروع مع مناطقها
+     */
     public function getAllBranchesWithAreas()
     {
         $branches = Branch::active()
@@ -193,7 +208,9 @@ class DeliveryController extends Controller
         ]);
     }
 
-
+    /**
+     * التحقق من إمكانية التوصيل لعنوان معين
+     */
     public function checkAddressDeliverability(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -211,6 +228,7 @@ class DeliveryController extends Controller
             ], 422);
         }
 
+        // جلب بيانات العنوان
         if ($request->address_id) {
             $address = Address::find($request->address_id);
             if (!$address) {
@@ -220,7 +238,7 @@ class DeliveryController extends Controller
                 ], 404);
             }
 
-
+            // التحقق من ملكية العنوان
             if (Auth::check() && $address->user_id !== Auth::id()) {
                 return response()->json([
                     'success' => false,
@@ -239,6 +257,7 @@ class DeliveryController extends Controller
             $district = $request->district;
         }
 
+        // البحث عن مناطق التوصيل
         $areas = $this->findAreasByCoordinates(
             $latitude,
             $longitude,
@@ -255,8 +274,10 @@ class DeliveryController extends Controller
             ], 404);
         }
 
+        // استخدام أول منطقة متاحة (يمكن تطوير لاختيار الأفضل)
         $area = $areas->first();
 
+        // التحقق من الحد الأدنى للطلب
         if (!$area->meetsMinimumOrder($request->order_amount)) {
             return response()->json([
                 'success' => false,
@@ -280,7 +301,9 @@ class DeliveryController extends Controller
         ]);
     }
 
-
+    /**
+     * الحصول على تفاصيل التوصيل لعناوين المستخدم
+     */
     public function getUserAddressesDeliveryInfo()
     {
         if (!Auth::check()) {
@@ -319,7 +342,9 @@ class DeliveryController extends Controller
         ]);
     }
 
-
+    /**
+     * البحث عن المناطق بالإحداثيات
+     */
     private function findAreasByCoordinates($lat, $lng, $city = null, $district = null, $branchId = null)
     {
         return DeliveryArea::with('branch')
@@ -339,7 +364,9 @@ class DeliveryController extends Controller
             ->values();
     }
 
-
+    /**
+     * حساب رسوم التوصيل لعنوان معين (للاستخدام الداخلي)
+     */
     public function calculateShippingForAddress(Address $address, $orderAmount, $branchId = null)
     {
         $areas = $this->findAreasByCoordinates(

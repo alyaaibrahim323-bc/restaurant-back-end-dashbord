@@ -30,23 +30,33 @@ class Branch extends Model
         'opening_hours' => 'array'
     ];
 
+    /**
+     * العلاقة مع مناطق التوصيل
+     */
     public function deliveryAreas()
     {
         return $this->hasMany(DeliveryArea::class);
     }
 
+    /**
+     * العلاقة مع الطلبات
+     */
     public function orders()
     {
         return $this->hasMany(Order::class);
     }
 
-
+    /**
+     * الحصول على الفروع النشطة
+     */
     public function scopeActive($query)
     {
         return $query->where('is_active', true);
     }
 
-
+    /**
+     * البحث عن الفروع ضمن نطاق معين
+     */
     public function scopeWithinRadius($query, $lat, $lng, $radius = 50)
     {
         return $query->whereRaw("
@@ -54,14 +64,16 @@ class Branch extends Model
         ", [$lat, $lng, $lat, $radius]);
     }
 
-
+    /**
+     * حساب المسافة بين الفرع وموقع العميل
+     */
     public function calculateDistance($customerLat, $customerLng)
     {
         if (!$this->latitude || !$this->longitude) {
             return null;
         }
 
-        $earthRadius = 6371;
+        $earthRadius = 6371; // كيلومتر
 
         $latDiff = deg2rad($customerLat - $this->latitude);
         $lngDiff = deg2rad($customerLng - $this->longitude);
@@ -75,14 +87,18 @@ class Branch extends Model
         return $earthRadius * $c;
     }
 
-
+    /**
+     * التحقق إذا كان الموقع ضمن نطاق التوصيل
+     */
     public function isWithinDeliveryRange($lat, $lng)
     {
         $distance = $this->calculateDistance($lat, $lng);
         return $distance !== null && $distance <= $this->delivery_radius_km;
     }
 
-
+    /**
+     * الحصول على المناطق النشطة
+     */
     public function getActiveAreas()
     {
         return $this->deliveryAreas()->active()->get();

@@ -37,6 +37,7 @@ class ProductVariant extends Model
         if ($this->stock <= 5) return 'low_stock';
         return 'in_stock';
     }
+    // في ProductVariant.php
 public function getOptionValuesSummaryAttribute()
 {
     return $this->optionValues

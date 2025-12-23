@@ -4,7 +4,7 @@ namespace App\Services;
 
 use Kreait\Firebase\Messaging\CloudMessage;
 use Kreait\Firebase\Messaging\Notification;
-use Kreait\Laravel\Firebase\Facades\Firebase;
+use Kreait\Laravel\Firebase\Facades\Firebase; // Updated facade
 use App\Models\User;
 use App\Models\DeviceToken;
 use Illuminate\Support\Facades\Log;
@@ -19,7 +19,7 @@ class FcmService
                 ->withData($data)
                 ->toToken($token);
 
-            Firebase::messaging()->send($message);
+            Firebase::messaging()->send($message); // Updated method call
             return true;
         } catch (\Exception $e) {
             Log::error('FCM send error: '.$e->getMessage());
@@ -70,7 +70,7 @@ class FcmService
                 ->withData($data)
                 ->toTopic($topic);
 
-            Firebase::messaging()->send($message);
+            Firebase::messaging()->send($message); // Updated method call
             return true;
         } catch (\Exception $e) {
             Log::error('FCM topic error: '.$e->getMessage());

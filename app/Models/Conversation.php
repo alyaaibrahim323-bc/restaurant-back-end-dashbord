@@ -29,26 +29,31 @@ class Conversation extends Model
         'updated_at' => 'datetime'
     ];
 
+    // العلاقة مع المستخدم
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    // العلاقة مع الأدمن
     public function admin()
     {
         return $this->belongsTo(User::class, 'admin_id');
     }
 
+    // سكوب للجلسات النشطة
     public function scopeActive($query)
     {
         return $query->where('is_closed', false);
     }
 
+    // سكوب للرسائل في جلسة محددة
     public function scopeBySession($query, $sessionId)
     {
         return $query->where('session_id', $sessionId);
     }
 
+    // سكوب لترتيب الرسائل
     public function scopeLatestFirst($query)
     {
         return $query->orderBy('created_at', 'desc');

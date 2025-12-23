@@ -9,7 +9,9 @@ use Illuminate\Support\Facades\Auth;
 
 class PointController extends Controller
 {
-
+    /**
+     * عرض نقاط المستخدم الحالي
+     */
     public function index()
     {
         $user = Auth::user();
@@ -23,6 +25,9 @@ class PointController extends Controller
         ]);
     }
 
+    /**
+     * إضافة نقاط للمستخدم
+     */
     public function store(Request $request)
     {
         $request->validate([
@@ -46,8 +51,12 @@ class PointController extends Controller
         ], 201);
     }
 
+    /**
+     * عرض تفاصيل نقطة محددة
+     */
     public function show(Point $point)
     {
+        // التحقق من أن النقطة تخص المستخدم الحالي
         if ($point->user_id !== Auth::id()) {
             return response()->json([
                 'success' => false,

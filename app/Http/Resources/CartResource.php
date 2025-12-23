@@ -14,7 +14,7 @@ class CartResource extends JsonResource
             'price' => $this->price,
                         'product' => new ProductResource($this->whenLoaded('product')),
 
-
+            // نقرأ الـ options من JSON
             'selected_options' => collect($this->options ?? [])->map(function ($option) {
                 return [
                     'option_id' => $option['option_id'] ?? null,

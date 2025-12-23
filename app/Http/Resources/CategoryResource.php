@@ -14,8 +14,10 @@ class CategoryResource extends JsonResource
             'slug'      => $this->slug,
             'description_ar'      => $this->description_ar,
 
+            // 'parent_id' => $this->parent_id,
 'image' => $this->image ? asset('storage/' . $this->image) : null,
 
+            // 'children'  => CategoryResource::collection($this->whenLoaded('children')),
         ];
     }
 }

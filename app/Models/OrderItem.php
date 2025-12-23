@@ -14,12 +14,17 @@ class OrderItem extends Model
         'price',
     ];
 
-
+    /**
+     * علاقة الطلب الخاص بعنصر الطلب
+     */
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class);
     }
 
+    /**
+     * علاقة المنتج الخاص بعنصر الطلب
+     */
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();

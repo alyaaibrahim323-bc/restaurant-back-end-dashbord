@@ -8,7 +8,9 @@ use Illuminate\Support\Facades\Log;
 
 class DeliveryService
 {
-
+    /**
+     * العثور على مناطق التوصيل المناسبة لعنوان معين
+     */
     public function findDeliveryAreasForAddress(Address $address, $branchId = null)
     {
         try {
@@ -18,6 +20,7 @@ class DeliveryService
                     $q->where('branch_id', $branchId);
                 });
 
+            // إذا كانت هناك إحداثيات، البحث بالإحداثيات أولاً
             if ($address->latitude && $address->longitude) {
                 $areas = $query->get()
                     ->filter(function ($area) use ($address) {
@@ -29,6 +32,7 @@ class DeliveryService
                     ->sortBy('delivery_fee')
                     ->values();
             } else {
+                // البحث بالمدينة والمنطقة فقط
                 $areas = $query->where(function($q) use ($address) {
                     $q->where('city', 'like', "%{$address->city}%")
                       ->orWhere('district', 'like', "%{$address->state}%");
@@ -43,7 +47,9 @@ class DeliveryService
         }
     }
 
-
+    /**
+     * مطابقة المدينة والمنطقة
+     */
     private function matchesByCityAndDistrict(DeliveryArea $area, Address $address)
     {
         $cityMatch = empty($area->city) ||
@@ -55,7 +61,9 @@ class DeliveryService
         return $cityMatch && $districtMatch;
     }
 
-
+    /**
+     * التحقق من إمكانية التوصيل للطلب
+     */
     public function validateOrderDelivery(Address $address, $orderAmount, $branchId = null)
     {
         $deliveryAreas = $this->findDeliveryAreasForAddress($address, $branchId);
@@ -86,6 +94,9 @@ class DeliveryService
         ];
     }
 
+    /**
+     * حساب أفضل خيار توصيل متاح
+     */
     public function getBestDeliveryOption($latitude, $longitude, $city, $district, $orderAmount, $branchId = null)
     {
         try {
@@ -101,7 +112,7 @@ class DeliveryService
                         return $area->containsLocation($latitude, $longitude);
                     }
 
-
+                    // Fallback to city/district matching
                     $cityMatch = empty($area->city) || str_contains(strtolower($area->city), strtolower($city));
                     $districtMatch = empty($area->district) || str_contains(strtolower($area->district), strtolower($district));
 
@@ -119,7 +130,7 @@ class DeliveryService
 
             $bestArea = $areas->first();
 
-
+            // التحقق من الحد الأدنى للطلب
             if (!$bestArea->meetsMinimumOrder($orderAmount)) {
                 return [
                     'success' => false,

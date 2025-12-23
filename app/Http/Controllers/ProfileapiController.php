@@ -10,6 +10,7 @@ use App\Models\User;
 
 class ProfileapiController extends Controller
 {
+    // عرض بيانات المستخدم الحالي
     public function show()
     {
         return response()->json([
@@ -17,6 +18,7 @@ class ProfileapiController extends Controller
         ]);
     }
 
+    // تحديث بيانات المستخدم
     public function update(Request $request)
     {
 

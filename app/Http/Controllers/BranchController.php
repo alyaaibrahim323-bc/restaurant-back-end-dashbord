@@ -12,7 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 class BranchController extends Controller
 {
-
+    /**
+     * الحصول على جميع الفروع
+     */
     public function index()
 {
     $branches = Branch::active()->get();
@@ -23,7 +25,9 @@ class BranchController extends Controller
     ]);
 }
 
-
+    /**
+     * إنشاء فرع جديد (للمشرفين)
+     */
     public function store(Request $request)
     {
         if (!Auth::user()->is_admin) {
@@ -62,7 +66,9 @@ class BranchController extends Controller
         ], 201);
     }
 
-
+    /**
+     * عرض فرع معين
+     */
     public function show(Branch $branch)
     {
         $branch->load(['deliveryAreas' => function($query) {
@@ -75,6 +81,9 @@ class BranchController extends Controller
         ]);
     }
 
+    /**
+     * تحديث فرع (للمشرفين)
+     */
     public function update(Request $request, Branch $branch)
     {
         if (!Auth::user()->is_admin) {
@@ -113,6 +122,9 @@ class BranchController extends Controller
         ]);
     }
 
+    /**
+     * حذف فرع (للمشرفين)
+     */
     public function destroy(Branch $branch)
     {
         if (!Auth::user()->is_admin) {
@@ -137,6 +149,9 @@ class BranchController extends Controller
         ]);
     }
 
+    /**
+     * إضافة منطقة توصيل لفرع (للمشرفين)
+     */
     public function addDeliveryArea(Request $request, Branch $branch)
     {
         if (!Auth::user()->is_admin) {
@@ -173,7 +188,9 @@ class BranchController extends Controller
         ], 201);
     }
 
-
+    /**
+     * تحديث منطقة توصيل (للمشرفين)
+     */
     public function updateDeliveryArea(Request $request, DeliveryArea $deliveryArea)
     {
         if (!Auth::user()->is_admin) {
@@ -210,6 +227,9 @@ class BranchController extends Controller
         ]);
     }
 
+    /**
+     * حذف منطقة توصيل (للمشرفين)
+     */
     public function deleteDeliveryArea(DeliveryArea $deliveryArea)
     {
         if (!Auth::user()->is_admin) {
@@ -227,7 +247,9 @@ class BranchController extends Controller
         ]);
     }
 
-
+    /**
+     * الحصول على مناطق توصيل فرع معين
+     */
     public function getBranchDeliveryAreas(Branch $branch)
     {
         $deliveryAreas = $branch->deliveryAreas()
@@ -243,6 +265,9 @@ class BranchController extends Controller
         ]);
     }
 
+    /**
+     * البحث عن الفروع المتاحة لموقع معين
+     */
     public function findBranchesForLocation(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -262,11 +287,11 @@ class BranchController extends Controller
         $branches = Branch::active()
             ->with(['deliveryAreas' => function($query) use ($request) {
                 $query->active();
-
+                
                 if ($request->city) {
                     $query->where('city', $request->city);
                 }
-
+                
                 if ($request->district) {
                     $query->where('district', $request->district);
                 }
@@ -275,15 +300,15 @@ class BranchController extends Controller
             ->filter(function ($branch) use ($request) {
                 if ($request->latitude && $request->longitude) {
                     $distance = $branch->calculateDistance(
-                        $request->latitude,
+                        $request->latitude, 
                         $request->longitude
                     );
                     $branch->distance = round($distance, 2);
                     $branch->delivery_available = $distance <= $branch->delivery_radius_km;
-
+                    
                     return $branch->delivery_available;
                 }
-
+                
                 return $branch->deliveryAreas->isNotEmpty();
             })
             ->values();

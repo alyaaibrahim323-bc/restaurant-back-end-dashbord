@@ -25,26 +25,26 @@ class CategoriesImport implements ToCollection, WithHeadingRow, WithValidation, 
 
     public function __construct()
     {
-
+        // جلب جميع التصنيفات الموجودة مسبقاً لتجنب التكرار
         $this->existingCategories = Category::all()->pluck('name', 'id')->toArray();
     }
 
     public function collection(Collection $rows)
     {
         foreach ($rows as $row) {
-
+            // إذا كان التصنيف موجود مسبقاً، تخطيه
             if (in_array($row['name'], $this->existingCategories)) {
                 continue;
             }
 
-
+            // البحث عن التصنيف الأب بالاسم
             $parentId = null;
             if (!empty($row['parent_category'])) {
                 $parent = Category::where('name', $row['parent_category'])->first();
                 $parentId = $parent ? $parent->id : null;
             }
 
-
+            // إنشاء التصنيف الجديد
             Category::create([
                 'name' => $row['name'],
                 'slug' => $row['slug'] ?? Str::slug($row['name']),
@@ -53,6 +53,7 @@ class CategoriesImport implements ToCollection, WithHeadingRow, WithValidation, 
                 'image' => $row['image_path'] ?? null,
             ]);
 
+            // تحديث قائمة التصنيفات الموجودة
             $this->existingCategories[] = $row['name'];
         }
     }

@@ -39,12 +39,17 @@ class Address extends Model
         return null;
     }
 
-
+    /**
+     * علاقة العنوان بالمستخدم
+     */
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * نطاق الاستعلام للعناوين الافتراضية
+     */
     public function scopeDefault($query)
     {
         return $query->where('is_default', true);
@@ -54,6 +59,9 @@ class Address extends Model
         return $this->hasMany(Order::class);
     }
 
+    /**
+     * نطاق الاستعلام لعناوين مستخدم معين
+     */
     public function scopeForUser($query, $userId)
     {
         return $query->where('user_id', $userId);

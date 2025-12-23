@@ -14,11 +14,13 @@ use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
+    // عرض جميع المنتجات (للضيوف والمستخدمين)
     public function index(Request $request)
     {
         $query = Product::with(['category', 'variants'])
             ->where('is_active', true);
 
+        // تطبيق الفلاتر
         $this->applyFilters($query, $request);
 
         $products = $query->paginate($request->get('per_page', 10));
@@ -35,6 +37,7 @@ class ProductController extends Controller
         ]);
     }
 
+    // عرض منتج واحد مع تفاصيل الخيارات
     public function show(Product $product)
     {
         $product->load([
@@ -49,6 +52,7 @@ class ProductController extends Controller
         ]);
     }
 
+    // عرض المنتجات حسب الفئة مع فلترة متقدمة
     public function productsByCategory(Request $request, $id)
     {
         $category = Category::find($id);
@@ -69,7 +73,8 @@ class ProductController extends Controller
         $products = $query->paginate($request->get('per_page', 12));
 
         $data = $products->map(function ($product) {
-            $imageUrl = asset('images/default-product.png');
+            // ✅ معالجة الصور بشكل آمن
+            $imageUrl = asset('images/default-product.png'); // صورة افتراضية
             if (!empty($product->images)) {
                 if (is_array($product->images)) {
                     $firstImage = $product->images[0] ?? null;
@@ -86,6 +91,7 @@ class ProductController extends Controller
                 }
             }
 
+            // ✅ حساب الأسعار بشكل دقيق
             $minPrice = $product->variants->min('price') ?? $product->price;
             $maxPrice = $product->variants->max('price') ?? $product->price;
 
@@ -122,7 +128,7 @@ class ProductController extends Controller
         ]);
     }
 
-
+    // دالة البحث في المنتجات
     public function search(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -146,11 +152,14 @@ class ProductController extends Controller
                   });
             });
 
+        // 🔹 تطبيق الفلاتر إن وجدت
         $this->applyFilters($query, $request);
 
         $products = $query->paginate($request->get('per_page', 10));
 
+        // 🔹 تجهيز البيانات قبل الإرسال
         $products->getCollection()->transform(function ($product) {
+            // ✅ معالجة الصور بنفس المنهج في باقي الـ APIs
             $imageUrl = asset('images/default-product.png');
             if (!empty($product->images)) {
                 if (is_array($product->images)) {
@@ -168,6 +177,7 @@ class ProductController extends Controller
                 }
             }
 
+            // ✅ حساب الأسعار بدقة
             $minPrice = $product->variants->min('price') ?? $product->discount_price ?? $product->price;
             $maxPrice = $product->variants->max('price') ?? $product->discount_price ?? $product->price;
 
@@ -185,6 +195,7 @@ class ProductController extends Controller
             ];
         });
 
+        // 🔹 استجابة منظمة وواضحة
         return response()->json([
             'success' => true,
             'query' => $searchTerm,
@@ -200,11 +211,14 @@ class ProductController extends Controller
         ]);
     }
 
-
+    // تطبيق الفلاتر والترتيب
+  // دالة عامة للفلترة (تستخدم الدالة الخاصة داخلياً)
 public function applyFilters($query, Request $request)
 {
+    // فلترة بالسعر
     if ($request->filled('min_price') || $request->filled('max_price')) {
         $query->where(function($q) use ($request) {
+            // للمنتجات التي لديها variants
             $q->whereHas('variants', function ($variantQuery) use ($request) {
                 if ($request->filled('min_price')) {
                     $variantQuery->where('price', '>=', $request->min_price);
@@ -213,6 +227,7 @@ public function applyFilters($query, Request $request)
                     $variantQuery->where('price', '<=', $request->max_price);
                 }
             })
+            // أو للمنتجات بدون variants
             ->orWhere(function($orQuery) use ($request) {
                 $orQuery->whereDoesntHave('variants');
                 if ($request->filled('min_price')) {
@@ -225,6 +240,7 @@ public function applyFilters($query, Request $request)
         });
     }
 
+    // الترتيب المبسط
     $sort = $request->get('sort', 'newest');
     switch ($sort) {
         case 'price_asc':
@@ -245,13 +261,14 @@ public function applyFilters($query, Request $request)
     }
 }
 
+    // عرض العناصر الشائعة (Popular Items)
     public function topProducts(Request $request)
     {
-        $limit = $request->get('limit', 10);
+        $limit = $request->get('limit', 10); // عدد المنتجات الراجعة
 
         $products = Product::with(['category', 'variants'])
-            ->withCount('orderItems')
-            ->orderBy('order_items_count', 'desc')
+            ->withCount('orderItems') // يعد الطلبات
+            ->orderBy('order_items_count', 'desc') // يرتب حسب عدد الطلبات
             ->take($limit)
             ->get();
 
@@ -261,8 +278,9 @@ public function applyFilters($query, Request $request)
         ]);
     }
 
-
+    // إنشاء منتج جديد (للمسؤولين فقط)
     public function store(Request $request) {
+        // التحقق من البيانات
         $validator = Validator::make($request->all(), [
             'name' => 'required|string|max:255',
             'description' => 'nullable|string',
@@ -277,6 +295,7 @@ public function applyFilters($query, Request $request)
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // معالجة الصور
         $images = [];
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $image) {
@@ -285,6 +304,7 @@ public function applyFilters($query, Request $request)
             }
         }
 
+        // إنشاء المنتج
         $product = Product::create([
             'uuid' => \Illuminate\Support\Str::uuid(),
             'name' => $request->name,
@@ -302,6 +322,7 @@ public function applyFilters($query, Request $request)
         ], 201);
     }
 
+    // تحديث المنتج (للمسؤولين فقط)
     public function update(Request $request, Product $product) {
         $validator = Validator::make($request->all(), [
             'name' => 'sometimes|string|max:255',
@@ -317,8 +338,10 @@ public function applyFilters($query, Request $request)
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        // تحديث البيانات
         $product->update($request->except('images'));
 
+        // تحديث الصور (إذا وُجِدَت)
         if ($request->hasFile('images')) {
             $images = [];
             foreach ($request->file('images') as $image) {
@@ -334,6 +357,7 @@ public function applyFilters($query, Request $request)
         ]);
     }
 
+    // حذف المنتج (للمسؤولين فقط)
     public function destroy(Product $product) {
         if (!empty($product->images)) {
             $images = is_array($product->images) ? $product->images : json_decode($product->images, true);
@@ -351,7 +375,7 @@ public function applyFilters($query, Request $request)
         return response()->json(null, 204);
     }
 
-
+    // إضافة/إزالة المنتج من المفضلة (للمستخدمين والضيوف)
     public function toggleFavorite(Request $request, Product $product) {
         $favorites = $request->session()->get('favorites', []);
         if (in_array($product->id, $favorites)) {
@@ -364,7 +388,7 @@ public function applyFilters($query, Request $request)
         return response()->json(['message' => 'تم التحديث']);
     }
 
-
+    // الحصول على متغير معين
     public function getVariant(ProductVariant $variant)
     {
         $variant->load('product', 'optionValues.option');

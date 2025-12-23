@@ -45,6 +45,7 @@ class Product extends Model
         'in_stock'
     ];
 
+    // العلاقات
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
@@ -82,6 +83,7 @@ class Product extends Model
         return $this->hasMany(OrderItem::class);
     }
 
+    // السعر بعد الخصم
     public function getFinalPriceAttribute(): float
     {
         if ($this->variants->isNotEmpty()) {
@@ -91,6 +93,7 @@ class Product extends Model
         return $this->discount_price ?? $this->price;
     }
 
+    // أقل سعر بين المتغيرات أو السعر الأساسي
     public function getMinPriceAttribute(): float
     {
         $minVariantPrice = $this->variants->min('price');
@@ -102,6 +105,7 @@ class Product extends Model
         return min($minVariantPrice, $this->price);
     }
 
+    // أعلى سعر بين المتغيرات أو السعر الأساسي
     public function getMaxPriceAttribute(): float
     {
         $maxVariantPrice = $this->variants->max('price');
@@ -113,6 +117,7 @@ class Product extends Model
         return max($maxVariantPrice, $this->price);
     }
 
+    // نطاق الأسعار كسلسلة نصية
     public function getPriceRangeAttribute(): string
     {
         if ($this->min_price === $this->max_price) {
@@ -122,6 +127,7 @@ class Product extends Model
         return number_format($this->min_price, 2) . ' - ' . number_format($this->max_price, 2) . ' ج.م';
     }
 
+    // إجمالي المخزون (المتغيرات + المخزون الأساسي)
     public function getTotalStockAttribute()
 {
     if ($this->variants()->exists()) {
@@ -130,11 +136,13 @@ class Product extends Model
     return $this->stock;
 }
 
+    // هل المنتج متوفر للشراء؟
     public function getIsAvailableAttribute(): bool
     {
         return $this->is_active && ($this->total_stock > 0);
     }
 
+    // هل هناك متغيرات متوفرة؟
     public function getInStockAttribute(): bool
     {
         if ($this->variants->isNotEmpty()) {
@@ -149,7 +157,7 @@ class Product extends Model
         static::saved(function ($product) {
         if ($product->variants()->exists()) {
             $product->stock = $product->variants->sum('stock');
-            $product->saveQuietly();
+            $product->saveQuietly(); // تجنب تكرار الحدث
         }
     });
         static::creating(function ($product) {
@@ -170,11 +178,13 @@ class Product extends Model
         });
 
         static::deleting(function ($product) {
+            // حذف المتغيرات والخيارات عند حذف المنتج
             $product->variants()->delete();
             $product->options()->delete();
         });
     }
-
+    /////////////////////////////////////////////////////////////////////////////////////////////
+    // أضف هذه العلاقات والأساليب
 public function reviews()
 {
     return $this->hasMany(Review::class);
@@ -192,18 +202,25 @@ public function verifiedReviews()
                 ->where('is_verified', true);
 }
 
-
+/**
+ * متوسط التقييمات
+ */
 public function getAverageRatingAttribute()
 {
     return $this->approvedReviews()->avg('rating') ?: 0;
 }
 
+/**
+ * عدد التقييمات
+ */
 public function getReviewsCountAttribute()
 {
     return $this->approvedReviews()->count();
 }
 
-
+/**
+ * توزيع التقييمات
+ */
 public function getRatingDistributionAttribute()
 {
     $distribution = [];
@@ -213,6 +230,9 @@ public function getRatingDistributionAttribute()
     return $distribution;
 }
 
+/**
+ * نسبة كل تقييم
+ */
 public function getRatingPercentagesAttribute()
 {
     $total = $this->reviews_count;

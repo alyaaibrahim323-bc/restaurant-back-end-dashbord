@@ -7,7 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderTracking;
 use App\Models\Address;
-use App\Models\Payment;
+use App\Models\Payment; 
 use App\Models\Offer;
 use App\Models\Branch;
 use Illuminate\Http\Request;
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Validator; 
 
 use Illuminate\Support\Facades\Session;
 class OrderController extends Controller
@@ -26,7 +26,9 @@ class OrderController extends Controller
     const STATUS_DELIVERED = 'delivered';
     const STATUS_CANCELLED = 'cancelled';
 
-    public function checkout(Request $request)
+    /**
+     * إنشاء طلب جديد
+     */public function checkout(Request $request)
 {
     return DB::transaction(function () use ($request) {
 
@@ -34,6 +36,7 @@ class OrderController extends Controller
             'branch_id' => 'required|exists:branches,id',
         ]);
 
+        // ✅ جلب الفرع
         $branch = Branch::active()->find($request->branch_id);
         if (!$branch) {
             return response()->json([
@@ -42,6 +45,7 @@ class OrderController extends Controller
             ], 400);
         }
 
+        // ✅ جلب عناصر السلة
         $cartItems = $this->getCartItems($request);
 
         if ($cartItems->isEmpty()) {
@@ -51,6 +55,7 @@ class OrderController extends Controller
             ], 400);
         }
 
+        // ✅ التحقق من الكميات
         foreach ($cartItems as $cartItem) {
             if ($cartItem->product->stock < $cartItem->quantity) {
                 return response()->json([
@@ -60,6 +65,7 @@ class OrderController extends Controller
             }
         }
 
+        // ✅ معالجة العنوان
         $address = $this->processAddress($request);
         if (!$address) {
             return response()->json([
@@ -68,10 +74,12 @@ class OrderController extends Controller
             ], 400);
         }
 
+        // ✅ الحسابات
         $subtotal = $this->calculateSubtotal($cartItems);
-        $deliveryFee = $branch->delivery_fee_base;
+        $deliveryFee = $branch->delivery_fee_base; // ✅ جلب التوصيل من الفرع
         $paymentMethod = $request->input('payment_method', 'cash');
 
+        // ✅ برومو كود
         $discountAmount = 0;
         $appliedOffer = null;
 
@@ -87,6 +95,7 @@ class OrderController extends Controller
 
         $total = $subtotal + $deliveryFee - $discountAmount;
 
+        // ✅ إنشاء الطلب
         $orderData = [
             'user_id' => Auth::id(),
             'guest_uuid' => Auth::check() ? null : $this->getGuestUuid($request),
@@ -97,7 +106,7 @@ class OrderController extends Controller
             'address_id' => $address->id,
             'tracking_number' => $this->generateTrackingNumber(),
             'payment_method' => $paymentMethod,
-            'branch_id' => $branch->id,
+            'branch_id' => $branch->id, // ✅ حفظ branch_id
         ];
 
         if (\Schema::hasColumn('orders', 'discount_amount')) {
@@ -110,6 +119,7 @@ class OrderController extends Controller
 
         $order = Order::create($orderData);
 
+        // ✅ عناصر الطلب
         foreach ($cartItems as $cartItem) {
             $selectedOptions = [];
 
@@ -136,7 +146,7 @@ class OrderController extends Controller
             $cartItem->product->decrement('stock', $cartItem->quantity);
         }
 
-
+        // ✅ تسجيل العرض المستخدم
         if ($appliedOffer && Auth::check()) {
             Auth::user()->offers()->attach($appliedOffer->id, [
                 'used_at' => now(),
@@ -147,23 +157,23 @@ class OrderController extends Controller
             $appliedOffer->increment('used_count');
         }
 
-
+        // ✅ بدء الدفع
         $paymentResponse = $this->initiatePayment($order, $paymentMethod);
 
-
+        // ✅ مسح السلة
         $this->clearCart($request);
 
-
+        // ✅ تتبع الطلب
         OrderTracking::create([
             'order_id' => $order->id,
             'status' => self::STATUS_PENDING,
             'notes' => 'تم إنشاء الطلب'
         ]);
 
-
+        // ✅ تحميل العلاقات
         $order->load('orderItems.product', 'address', 'branch');
 
-
+        // ✅ الرد النهائي
         $response = [
             'success' => true,
             'message' => 'تم إنشاء الطلب بنجاح',
@@ -190,6 +200,9 @@ class OrderController extends Controller
 }
 
 
+     /**
+     * تطبيق البرومو كود أثناء الشيك اوت - الجديدة
+     */
     private function applyPromoCodeAtCheckout($promoCode, $subtotal, $deliveryFee, $user)
     {
         try {
@@ -202,13 +215,15 @@ class OrderController extends Controller
                 ];
             }
 
-
+            // التحقق من أن العرض متاح
             if (!$offer->is_available) {
                 return [
                     'discount_amount' => 0,
                     'offer' => null
                 ];
             }
+
+            // التحقق من أن المستخدم لم يستخدم هذا العرض من قبل
             if ($user && $user->hasUsedPromoCode($offer->promo_code)) {
                 return [
                     'discount_amount' => 0,
@@ -216,7 +231,7 @@ class OrderController extends Controller
                 ];
             }
 
-
+            // حساب قيمة الخصم
             $discountAmount = $offer->applyDiscount($subtotal, $deliveryFee);
             $discountAmount = is_numeric($discountAmount) ? $discountAmount : 0;
 
@@ -234,7 +249,9 @@ class OrderController extends Controller
         }
     }
 
-
+    /**
+     * تنسيق استجابة العرض - الجديدة
+     */
     private function formatOfferResponse($offer)
     {
         return [
@@ -248,9 +265,12 @@ class OrderController extends Controller
         ];
     }
 
-
-      private function initiatePayment(Order $order, $paymentMethod = 'cash')
+    /**
+     * بدء عملية الدفع - مصحح
+         */
+      private function initiatePayment(Order $order, $paymentMethod = 'cash') // ⬅ مسح Request $request
     {
+        // معالجة الدفع حسب الطريقة المحددة
         switch ($paymentMethod) {
             case 'card':
                 return $this->processCardPayment($order);
@@ -265,11 +285,13 @@ class OrderController extends Controller
     private function processCashOnDelivery(Order $order)
     {
         try {
+            // إنشاء معرف معاملة فريد للدفع النقدي
             $transactionId = 'CASH-' . now()->format('YmdHis') . '-' . $order->id;
 
+            // إنشاء سجل الدفع في جدول payments
             $payment = Payment::create([
                 'order_id' => $order->id,
-                'amount' => $order->total,
+                'amount' => $order->total, // ⭐⭐ استخدام order->total فقط
                 'payment_method' => 'cash',
                 'status' => 'pending',
                 'transaction_id' => $transactionId,
@@ -305,6 +327,7 @@ class OrderController extends Controller
 
     private function processCardPayment(Order $order)
     {
+        // معالجة الدفع بالبطاقة وإنشاء سجل الدفع
         $payment = \App\Models\Payment::create([
             'order_id' => $order->id,
             'amount' => $order->total + $order->shipping_cost,
@@ -313,12 +336,14 @@ class OrderController extends Controller
 
         ]);
 
+        // هنا يمكنك إضافة منطق معالجة البطاقة
         $paymentController = new PaymentController();
         return $paymentController->initiatePayment($request, $order);
     }
 
     private function processBankTransfer(Order $order)
     {
+        // معالجة التحويل البنكي وإنشاء سجل الدفع
         $payment = \App\Models\Payment::create([
             'order_id' => $order->id,
             'amount' => $order->total + $order->shipping_cost,
@@ -344,6 +369,9 @@ class OrderController extends Controller
         ];
     }
 
+    /**
+     * تتبع الطلب
+     */
      public function trackOrder($orderId)
 {
     try {
@@ -364,21 +392,25 @@ class OrderController extends Controller
             ], 403);
         }
 
+        // تجهيز العناصر بشكل آمن مع معالجة الصور
         $items = $order->orderItems->map(function ($item) {
             $product = $item->product;
 
             if ($product) {
+                // لو المنتج عنده صور متعددة (مثلاً JSON array)
                 if (is_array($product->images) && !empty($product->images)) {
                     $imagePath = $product->images[0];
                 }
+                // لو عنده عمود image واحد فقط
                 elseif (!empty($product->image)) {
                     $imagePath = $product->image;
                 }
             }
 
+            // نضيف المسار الكامل لو موجود
             $imageUrl = $imagePath
                 ? asset('storage/' . ltrim($imagePath, '/'))
-                : asset('images/default-product.png');
+                : asset('images/default-product.png'); // صورة افتراضية
 
             return [
                 'id' => $item->id,
@@ -428,6 +460,7 @@ class OrderController extends Controller
     try {
         $user = Auth::user();
 
+        // الحالات التي تعتبر "قادمة" أو "في الطريق"
         $upcomingStatuses = [
 
             self::STATUS_SHIPPED
@@ -439,6 +472,7 @@ class OrderController extends Controller
             $query->where('user_id', $user->id);
         }
 
+        // جلب الطلبات مع العلاقات المهمة
         $orders = $query->with([
             'orderItems.product',
             'payment',
@@ -450,6 +484,7 @@ class OrderController extends Controller
         ->orderBy('created_at', 'desc')
         ->get();
 
+        // تحويل البيانات لإضافة معلومات إضافية
         $orders->transform(function ($order) {
             $order->status_label = $this->getStatusLabel($order->status);
             $order->is_upcoming = true;
@@ -496,12 +531,15 @@ class OrderController extends Controller
 
      public function getUserOrders(Request $request)
     {
+        // تحديد الاستعلام بناءً على نوع المستخدم
         $query = Order::query();
 
         if (Auth::check()) {
+            // المستخدم المسجل
             $query->where('user_id', Auth::id());
         }
 
+        // جلب الطلبات مع العلاقات المهمة
         $orders = $query->with([
             'orderItems.variant.product',
             'payment',
@@ -512,6 +550,7 @@ class OrderController extends Controller
         ->orderBy('created_at', 'desc')
         ->get();
 
+        // إضافة تواريخ التسليم المتوقعة والفعلية
         $orders->transform(function ($order) {
 
             if ($order->status === self::STATUS_DELIVERED) {
@@ -533,14 +572,16 @@ class OrderController extends Controller
     }
 
 
-
+    /**
+     * تحديث حالة الطلب (للمشرفين)
+     */
     public function updateStatus(Request $request, Order $order)
     {
         $request->validate([
             'status' => 'required|in:processing,shipped,delivered,cancelled',
             'tracking_number' => 'nullable|string|max:50',
             'notes' => 'nullable|string|max:255',
-            'carrier' => 'nullable|string|max:50'
+            'carrier' => 'nullable|string|max:50' // تم إضافة حقل شركة الشحن
         ]);
 
         if (!Auth::user()->is_admin) {
@@ -550,15 +591,18 @@ class OrderController extends Controller
             ], 403);
         }
 
+        // تحديث حالة الطلب
         $order->update(['status' => $request->status]);
 
+        // إنشاء سجل التتبع مع شركة الشحن
         $tracking = OrderTracking::create([
             'order_id' => $order->id,
             'status' => $request->status,
             'notes' => $request->notes ?? 'تحديث حالة الطلب',
-            'carrier' => $request->carrier
+            'carrier' => $request->carrier // تم إضافة شركة الشحن
         ]);
 
+        // تحديث رقم التتبع إذا تم تقديمه
         if ($request->tracking_number) {
             $order->update(['tracking_number' => $request->tracking_number]);
         }
@@ -575,19 +619,22 @@ class OrderController extends Controller
         ]);
     }
 
-
+    // ------ الدوال المساعدة ------ //
 
     private function processAddress(Request $request)
     {
+        // إذا كان المستخدم مسجل الدخول
         if (Auth::check()) {
             return $this->handleAuthenticatedUserAddress($request);
         }
 
+        // إذا كان زائراً
         return $this->handleGuestAddress($request);
     }
 
     private function handleAuthenticatedUserAddress(Request $request)
     {
+        // إذا تم إرسال address_id
         if ($request->has('address_id')) {
             $address = Address::where('user_id', Auth::id())
                             ->find($request->address_id);
@@ -595,15 +642,18 @@ class OrderController extends Controller
             if ($address) return $address;
         }
 
+        // إذا تم إرسال بيانات عنوان جديد
         if ($request->has('street')) {
             return $this->createNewAddressForUser($request);
         }
 
+        // إذا لم يتم إرسال أي بيانات عنوان، استخدام العنوان الافتراضي
         return $this->getDefaultUserAddress();
     }
 
     private function handleGuestAddress(Request $request)
     {
+        // يجب أن يرسل الزائر بيانات العنوان كاملة
         $validated = $request->validate([
             'street' => 'required|string|max:255',
             'city' => 'required|string|max:100',
@@ -618,6 +668,7 @@ class OrderController extends Controller
             'longitude' => 'nullable|numeric'
         ]);
 
+        // إنشاء عنوان جديد للزائر
         return Address::create($validated);
     }
 
@@ -640,6 +691,7 @@ class OrderController extends Controller
 
         $address = Address::create(array_merge($validated, ['user_id' => Auth::id()]));
 
+        // إذا كان العنوان الافتراضي، تحديث العناوين الأخرى
         if ($request->is_default) {
             Address::where('user_id', Auth::id())
                 ->where('id', '!=', $address->id)
@@ -651,10 +703,12 @@ class OrderController extends Controller
 
     private function getDefaultUserAddress()
     {
+        // العثور على العنوان الافتراضي للمستخدم
         $address = Address::where('user_id', Auth::id())
                         ->where('is_default', true)
                         ->first();
 
+        // إذا لم يكن هناك عنوان افتراضي، استخدام أول عنوان
         if (!$address) {
             $address = Address::where('user_id', Auth::id())->first();
         }
@@ -667,6 +721,7 @@ class OrderController extends Controller
         try {
             $deliveryController = new DeliveryController();
 
+            // البحث عن منطقة التوصيل
             $areaRequest = new Request([
                 'area_name' => $address->city,
                 'latitude' => $address->latitude,
@@ -680,11 +735,13 @@ class OrderController extends Controller
 
             if (!$areaData->success || empty($areaData->data)) {
                 Log::warning('No delivery area found', ['address' => $address->toArray()]);
-                return 30;
+                return 30; // رسوم افتراضية
             }
 
+            // استخدام أول منطقة متاحة
             $deliveryArea = $areaData->data[0];
 
+            // حساب رسوم التوصيل
             $feeRequest = new Request([
                 'area_name' => $deliveryArea->area_name,
                 'order_amount' => $subtotal
@@ -698,11 +755,11 @@ class OrderController extends Controller
             }
 
             Log::warning('Failed to calculate delivery fee', ['area' => $deliveryArea->area_name]);
-            return $deliveryArea->delivery_fee ?? 30;
+            return $deliveryArea->delivery_fee ?? 30; // استخدام السعر الافتراضي للمنطقة
 
         } catch (\Exception $e) {
             Log::error('Delivery calculation error: ' . $e->getMessage());
-            return 30;
+            return 30; // رسوم افتراضية في حالة الخطأ
         }
     }
 
@@ -715,7 +772,8 @@ class OrderController extends Controller
         $dist = rad2deg($dist);
         $miles = $dist * 60 * 1.1515;
 
-        return $miles * 1.609344;}
+        return $miles * 1.609344; // تحويل إلى كيلومترات
+    }
 
     private function getShippingCostByDistance($distance)
     {
@@ -724,7 +782,7 @@ class OrderController extends Controller
         if ($distance < 20) return 30;
         if ($distance < 50) return 50;
         if ($distance < 100) return 80;
-        return 120;
+        return 120; // للمسافات الكبيرة
     }
 
     private function generateTrackingNumber() {
@@ -786,6 +844,7 @@ class OrderController extends Controller
    private function calculateTotal($cartItems)
     {
         return $cartItems->sum(function ($item) {
+            // التحقق من وجود المنتج والسعر
             if (!$item->product || !$item->price) {
                 Log::warning('Cart item missing product or price', [
                     'cart_id' => $item->id,
@@ -801,6 +860,7 @@ class OrderController extends Controller
 
     private function getGuestUuid(Request $request)
     {
+        // الجلب من الكوكيز أولاً، ثم من جسم الطلب، ثم من الرأس
         return $request->cookie('guest_uuid')
             ?? $request->input('guest_uuid')
             ?? $request->header('X-Guest-Uuid');
@@ -836,7 +896,9 @@ class OrderController extends Controller
     {
         return $subtotal + $shippingCost - $discountAmount;
     }
-
+    /**
+ * التحقق من إمكانية التوصيل قبل إنشاء الطلب
+ */
     public function checkDeliveryAvailability(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -856,6 +918,7 @@ class OrderController extends Controller
             ], 422);
         }
 
+        // معالجة العنوان
         $address = $this->processAddress($request);
         if (!$address) {
             return response()->json([
@@ -864,9 +927,11 @@ class OrderController extends Controller
             ], 400);
         }
 
+        // حساب subtotal مؤقت
         $cartItems = $this->getCartItems($request);
         $subtotal = $this->calculateSubtotal($cartItems);
 
+        // التحقق من التوصيل
         $deliveryController = new DeliveryController();
         $areaRequest = new Request([
             'area_name' => $address->city,
@@ -887,6 +952,7 @@ class OrderController extends Controller
             ]);
         }
 
+        // حساب رسوم التوصيل
         $deliveryArea = $areaData->data[0];
         $feeRequest = new Request([
             'area_name' => $deliveryArea->area_name,
